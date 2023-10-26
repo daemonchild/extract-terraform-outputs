@@ -2,61 +2,66 @@
 
 # Extract Terraform Output into Environment Variables
 
-Write-Host "[HELLO] Extract Terraform Output into Environment Variables" -ForegroundColor Blue
-$timestampNow = Get-Date -Format "yyyyddmm-HHmm"
+function ConvertTFOutputsTo-EnvVariables () {
 
-$envHeader = "AZ_TF"
+    Write-Host "[HELLO] Extract Terraform Output into Environment Variables" -ForegroundColor Blue
+    $timestampNow = Get-Date -Format "yyyyddmm-HHmm"
 
-# Check: Are we in a terraform folder?
-$searchPath = $PSScriptRoot + "\terraform.tfstate"
-If ([System.IO.File]::Exists($searchPath)) {
+    $envHeader = "AZ_TF"
 
-    # We are. Process the Terraform Outputs
-    Write-Host "[OK] Terraform .state found" -ForegroundColor DarkGreen
+    # Check: Are we in a terraform folder?
+    $searchPath = (Get-Location).Path + "\terraform.tfstate"
 
-    # Run Terraform, save output
-    $outputFile = "./terraform-output-$timestampNow.json"
-    terraform output -json > $outputFile
+    If ([System.IO.File]::Exists($searchPath)) {
 
-    # Import the file
-    $outputs = @(Get-Content $outputFile -raw | ConvertFrom-Json)
+        # We are. Process the Terraform Outputs
+        Write-Host "[OK] Terraform .state found" -ForegroundColor DarkGreen
 
-    $outputs | ForEach-Object {
-            $_.PSObject.Properties | ForEach-Object {
+        # Run Terraform, save output
+        $outputFile = "./terraform-output-$timestampNow.json"
+        terraform output -json > $outputFile
 
-                    # Extract the key name
-                    $keyName = $_.name
-                    $keyCaps = $keyName.ToUpper()
+        # Import the file
+        $outputs = @(Get-Content $outputFile -raw | ConvertFrom-Json)
 
-                    # Create environment variable name
-                    $envVariableName = "${envHeader}_${keyCaps}"
-                    $envValue = $outputs.$keyName.value
-                    $isSensitive = $outputs.$keyName.sensitive
+        $outputs | ForEach-Object {
+                $_.PSObject.Properties | ForEach-Object {
 
-                    # Set the variable
-                    Set-Item -Path ENV:$envVariableName -Value $envValue
+                        # Extract the key name
+                        $keyName = $_.name
+                        $keyCaps = $keyName.ToUpper()
 
-                    Write-Host -NoNewline "[ADDED] ${envVariableName} " -ForegroundColor DarkYellow
-                    If ($isSensitive -eq "true") {
+                        # Create environment variable name
+                        $envVariableName = "${envHeader}_${keyCaps}"
+                        $envValue = $outputs.$keyName.value
+                        $isSensitive = $outputs.$keyName.sensitive
 
-                        Write-Host "WARNING: SENSITIVE" -BackgroundColor DarkRed -ForegroundColor White
+                        # Set the variable
+                        Set-Item -Path ENV:$envVariableName -Value $envValue
 
-                    } else {
-                        Write-Host
+                        Write-Host -NoNewline "[ADDED] ${envVariableName} " -ForegroundColor DarkYellow
+                        If ($isSensitive -eq "true") {
+
+                            Write-Host "WARNING: SENSITIVE" -BackgroundColor DarkRed -ForegroundColor White
+
+                        } else {
+                            Write-Host
+                        }
+
                     }
+                } 
 
-                }
-            } 
+        # Remove the temporary Json file
+        Remove-Item -Path $outputFile
 
-    # Remove the temporary Json file
-    Remove-Item -Path $outputFile
+    } Else {
 
-} Else {
+        Write-Host "[ERROR] No Terraform .state file detected" -ForegroundColor Red
 
-    Write-Host "[ERROR] No Terraform .state file detected" -ForegroundColor Red
+    }
+
+    Write-Host "[GOODBYE]" -ForegroundColor Blue
 
 }
-
-Write-Host "[GOODBYE]" -ForegroundColor Blue
 
 
